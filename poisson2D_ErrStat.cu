@@ -48,7 +48,11 @@ int main(){
 	int currentR = minR;
 	int r = 0;
 	int n = 0;
+	int p = 0;
+	int pnew = 0;
 	printf("Start!\n");
+	printf("Progress: %d%%", p);
+	fflush(stdout);
 	while(r < numR){
 		while(n < numN){
 			NList[n] = currentN;
@@ -57,6 +61,17 @@ int main(){
 			maxErrorList[n+r*numN] = *maxError;
 			n += 1;
 			currentN += dN;
+			pnew = (int) (100 * (n + r * numN)) / (numN * numR);
+			if(pnew > p){
+				p = pnew;
+				if(p <= 10){
+					printf("\b\b%d%%", p);
+					fflush(stdout);
+				}else{
+					printf("\b\b\b%d%%", p);
+					fflush(stdout);
+				}
+			}
 		}
 		RList[r] = currentR;
 		r += 1;
@@ -64,6 +79,7 @@ int main(){
 		n = 0;
 		currentN = minN;
 	}
+	printf("\b\b\b100%%\n");
 	printf("Done!\n");
 	
 	printf("Exporting Data...");
