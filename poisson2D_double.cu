@@ -29,7 +29,6 @@ int main(){
 	
 	char *uFile = (char *)"u_data.dat";
 	char *rFile = (char *)"r_data.dat";
-	char *rfftFile = (char *)"rfft_data.dat";
 	
 	double *X = (double *)malloc(sizeof(double) * N);
 	double *Y = (double *)malloc(sizeof(double) * N);
@@ -113,7 +112,8 @@ int main(){
 	printf("Start to solve the Poisson equation...\n");
 	clock_t startTime22 = clock();
 
-	double scale = 1.0 / (N * N);
+	const double PI2 = 4 * PI * PI;
+	double scale = 1.0 / (N * N * PI2);
 	real2complex<<<dimGrid, dimBlock>>>(r_complex_d, r_d, N);
 	cufftExecZ2Z(plan, r_complex_d, r_complex_d, CUFFT_FORWARD);
 	solve_poisson<<<dimGrid, dimBlock>>>(r_complex_d, kx_d, ky_d, N);
@@ -255,7 +255,7 @@ void gaussian(double *bin, const double *X, const double *Y, const int n){
 	// Generate required function
 	printf("Generating density distribution...\n");
 	for(int s = 0; s < sNum; s++){
-		scale[s] = 1.0 / sqrt(2 * PI * var[s]);
+		scale[s] = 10.0 / sqrt(2 * PI * var[s]);
 	}
 	for(int j = 0; j < n; j++){
         for(int i = 0; i < n; i++){
