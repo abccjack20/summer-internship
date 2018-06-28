@@ -79,8 +79,7 @@ int main(){
 		n = 0;
 		currentN = minN;
 	}
-	printf("\b\b\b100%%\n");
-	printf("Done!\n");
+	printf("\nDone!\n");
 	
 	printf("Exporting Data...");
 	exportData(errorFile, NList, RList, errorList, numN, numR);
