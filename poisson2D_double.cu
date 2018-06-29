@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <time.h>
 
+#define dim		2
 #define TPBx	32  // TPBx * TPBy = number of threads per block
 #define TPBy 	32 
 
@@ -13,18 +14,20 @@ __global__ void real2complex(cufftDoubleComplex *c, double *a, int n);
 __global__ void complex2real_scaled(double *a, cufftDoubleComplex *c, double scale, int n);
 __global__ void solve_poisson(cufftDoubleComplex *c, double *kx, double *ky, int n);
 void exportData(const char *file, const double *X, const double *Y, const double *Z, const int n);
-void gaussian(double *bin, const double *X, const double *Y, const int n);
+void gaussian(double *bin, const double *X, const double *Y, const double *sPos, const double *var, const int sNum, const int n);
+void fixBC(double *result, const double *X, const double *Y, const double *sPos, const int sNum, const double delta, const int n);	// Boundary condition
 
 
 int main(){
 	///////////////////////////// INITIZALIZATION ////////////////////////////
-	int N, R; 	
+	int N, R, sNum; 	
 	printf("Phase 1: Set Up The Environment for Testing\n");
 	printf("Input the range of x and y: ");		// the range of x and y will be from -R to R
 	scanf("%d", &R);
 	printf("Input the number of samples: ");	// the number of samples will be N * N
 	scanf("%d", &N); 
-	printf("Allocating memory...\n");
+	printf("Allocating memory...");
+	fflush(stdout);
 	clock_t startTime11 = clock();
 	
 	char *uFile = (char *)"u_data.dat";
@@ -69,8 +72,25 @@ int main(){
 	}
 	clock_t endTime11 = clock();
 	
+	printf("done!\n");
+	fflush(stdout);
+	
 	clock_t startTime12 = clock();
-	gaussian(r, X, Y, N);	// Generate a Gaussian Distribution for r
+	printf("Number of signal: ");
+	scanf("%d", &sNum);
+	double *sPos = (double *)malloc(sizeof(double) * dim * sNum);	// Position of signal
+	double *var = (double *)malloc(sizeof(double) * sNum);			// Variances
+	for(int s = 0; s < sNum; s++){
+		printf("Position of signal %d(e.g. 1.2 -3): ", s+1);
+		scanf("%lf %lf", &sPos[0+s*dim], &sPos[1+s*dim]);
+		printf("Value of variance %d: ", s+1);
+		scanf("%lf", &var[s]);
+	}
+	for(int s = 0; s < sNum; s++){
+		printf("Position %d = (%lf,%lf); Variance %d = %lf\n", s+1, sPos[0+s*dim],
+			   sPos[1+s*dim], s+1, sNum, var[s]);
+	}
+	gaussian(r, X, Y, sPos, var, sNum, N);	// Generate a Gaussian Distribution for r
 	clock_t endTime12 = clock();
 	
 	for (int i = 0; i < N * N; i++){
@@ -86,7 +106,8 @@ int main(){
 	//////////////////////////////////////////////////////////////////////////
 	
 	printf("Phase 2: Evaluation\n");
-	printf("Copying data from the host to the device...\n");
+	printf("Copying data from the host to the device...");
+	fflush(stdout);
 	clock_t startTime21 = clock();
 	
 	cudaMemcpy(kx_d, kx, sizeof(double) * N, cudaMemcpyHostToDevice);
@@ -109,7 +130,9 @@ int main(){
 	}
 	
 	clock_t endTime21 = clock();
-	printf("Start to solve the Poisson equation...\n");
+	printf("done!\n");
+	printf("Start to solve the Poisson equation...");
+	fflush(stdout);
 	clock_t startTime22 = clock();
 
 	const double PI2 = 4 * PI * PI;
@@ -119,23 +142,27 @@ int main(){
 	solve_poisson<<<dimGrid, dimBlock>>>(r_complex_d, kx_d, ky_d, N);
 	cufftExecZ2Z(plan, r_complex_d, r_complex_d, CUFFT_INVERSE);
 	complex2real_scaled<<<dimGrid, dimBlock>>>(r_d, r_complex_d, scale, N);
-	
 	clock_t endTime22 = clock();
-	clock_t startTime23 = clock();
-
-	cudaMemcpy(u, r_d, sizeof(double) * N * N, cudaMemcpyDeviceToHost);
 	
+	clock_t startTime23 = clock();
+	cudaMemcpy(u, r_d, sizeof(double) * N * N, cudaMemcpyDeviceToHost);
 	clock_t endTime23 = clock();
+	printf("done!\n");
+	fflush(stdout);
+	
+	clock_t startTime24 = clock();
+	fixBC(u, X, Y, sPos, sNum, deltaX, N);
+	clock_t endTime24 = clock();
+	
 	printf("Phase 2 ended\n");
 
-	double totalTime21 = (double)(endTime22 - startTime22) / CLOCKS_PER_SEC;
+	double totalTime21 = (double)(endTime22 + endTime24 - startTime22 - startTime22) / CLOCKS_PER_SEC;
 	double totalTime22 = (double)(endTime21 + endTime23 - startTime21 - endTime23) / CLOCKS_PER_SEC;
 	
 	printf("Time spent on calculation: %lf sec\n", totalTime21);
 	printf("Data spent on data transfer: %lf sec\n\n", totalTime22);
 	
 	printf("Phase 3: Data Exportation\n");
-	printf("Exporting data...\n");
 	
 	clock_t startTime31 = clock();
 	exportData(rFile, X, Y, r, N);
@@ -196,13 +223,14 @@ __global__ void solve_poisson(cufftDoubleComplex *c, double *kx, double *ky, int
 	
 	if (idxX < n && idxY < n){
         int idx = idxX + idxY * n;
-        double scale = -(kx[idxX] * kx[idxX] + ky[idxY] * ky[idxY]);
+		double scale;
 		
         if(idxX == 0 && idxY == 0){
-			scale = 1.0;
+			scale = 0.0;
+		}else{
+			scale = -1.0 / (kx[idxX] * kx[idxX] + ky[idxY] * ky[idxY]);
 		}
 		
-        scale = 1.0 / scale;
         c[idx].x *= scale;
         c[idx].y *= scale;
 	}
@@ -213,13 +241,18 @@ void exportData(const char *file, const double *X, const double *Y, const double
 	
 	FILE *dataFile = fopen(file, "w");
 	
+	printf("Exporting data to \"%s\"...", file);
+	fflush(stdout);
+	
 	if(dataFile != NULL){
 		for(int j = 0; j < n ; j++){
 			for(int i = 0; i < n; i++){ 
 				fprintf(dataFile, "%lf\t%lf\t%lf\n", X[i], Y[j], Z[i+j*n]);
 			}
 		}
+		printf("done!\n");
 		printf("All data have been stored in \"%s\".\n", file);
+		fflush(stdout);
 		fclose(dataFile);
 	}else{
 		printf("File not found!");
@@ -227,33 +260,17 @@ void exportData(const char *file, const double *X, const double *Y, const double
 	
 }
 
-void gaussian(double *bin, const double *X, const double *Y, const int n){
+void gaussian(double *bin, const double *X, const double *Y, const double *sPos, const double *var, const int sNum, const int n){
 
-	int sNum;		// Number of signal
-	int dim = 2;
 	const double PI = 4 * atan(1);
 	double x, y;
 	
-	// Ask for essential parameters
-	printf("Number of signal: ");
-	scanf("%d", &sNum);
-	
-	double *sPos = (double *)malloc(sizeof(double) * dim * sNum);	// Position of signal
 	double *scale = (double *)malloc(sizeof(double) * sNum);		// Normalization factor
-	double *var = (double *)malloc(sizeof(double) * sNum);			// Variances
-	for(int s = 0; s < sNum; s++){
-		printf("Position of signal %d(e.g. 1.2 -3): ", s+1);
-		scanf("%lf %lf", &sPos[0+s*dim], &sPos[1+s*dim]);
-		printf("Value of variance %d: ", s+1);
-		scanf("%lf", &var[s]);
-	}
-	for(int s = 0; s < sNum; s++){
-		printf("Position %d = (%lf, %lf); Variance %d = %lf\n", s+1, sPos[0+s*dim],
-			   sPos[1+s*dim], s+1, var[s]);
-	}
 	
 	// Generate required function
-	printf("Generating density distribution...\n");
+	printf("Generating density distribution...");
+	fflush(stdout);
+	
 	for(int s = 0; s < sNum; s++){
 		scale[s] = 10.0 / sqrt(2 * PI * var[s]);
 	}
@@ -273,9 +290,32 @@ void gaussian(double *bin, const double *X, const double *Y, const int n){
 		bin[(n-1)+i*n] = bin[i*n];
 	}
 	
-	// Clean up
-	free(sPos);
-	free(scale);
-	free(var);
+	printf("done!\n");
+	fflush(stdout);
+
+}
+
+void fixBC(double *result, const double *X, const double *Y, const double *sPos, const int sNum, const double delta, const int n){
+
+	double a, b, c;			// Solution of laplace equation: ax + by + c
+	
+	printf("Handling boundary condition...");
+	fflush(stdout);
+	
+	a = (double)(result[2+1*n] - result[0+1*n]) / (delta * 2);
+	b = (double)(result[1+2*n] - result[1+0*n]) / (delta * 2);
+	for(int s=0; s<sNum; s++){
+		r0 = sqrt(sPos[0+s*dim] * sPos[0+s*dim] + sPos[1+s*dim] * sPos[1+s*dim]);
+	}
+	c = result[1+1*n] - a * X[1] - b * Y[1];
+	
+	for(int i=0; i<n; i++){
+		for(int j=0; j<n; j++){
+			result[i+j*n] -= a * X[i] + b * Y[j] + c;
+		}
+	}
+	
+	printf("done!\n");
+	fflush(stdout);
 
 }
