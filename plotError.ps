@@ -1,0 +1,32 @@
+set xrange[500:5000]
+set yrange[20:500]
+set view map
+# set palette rgbformulae 10,13,33
+set xlabel "Sample Size"
+set ylabel "Sample Range"
+set term png size 760,800
+
+set title "Average Error(Two Peaks; Sigma = 1.0; Centered at (8,8) and (-8,-8))"
+set cbrange [0:0.032]
+set output "Error.png"
+set rmargin at screen 0.83
+set lmargin at screen 0.13
+set tmargin at screen 0.9
+set bmargin at screen 0.13
+splot "error.dat" u 1:2:3 with points palette ps 2 pt 5
+
+set title "Maximum Error(Two Peaks; Sigma = 1.0; Centered at (8,8) and (-8,-8))"
+set cbrange [0:1.1]
+set output "MaxError.png"
+set rmargin at screen 0.85
+splot "maxError.dat" u 1:2:3 with points palette ps 2 pt 5
+
+set xrange[500:5000]
+set yrange[0:3.3]
+set title "Computational Time"
+set ylabel "Time(s) per 50 loop"
+set output "TimeFit.png"
+f(x) = a*x + b + 1e-9
+fit f(x) "time_data.dat" u 1:2 via a, b
+plot "time_data.dat" u 1:2 with points ps 2 pt 5,\
+	 f(x) with lines

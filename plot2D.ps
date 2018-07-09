@@ -1,0 +1,27 @@
+set xrange [-150:150]
+set yrange [-1:4.3]
+set xlabel "x"
+set ylabel "y"
+
+set term wxt 0
+set title "r"
+plot "rX_data.dat" using 1:2 title "r" with lines
+	 
+set term wxt 1
+set title "R"
+plot "RX_data.dat" using 1:2 title "R" with lines
+
+set yrange [-24:4.3]
+set term wxt 2
+set title "r and u"
+plot "uX_data.dat" using 1:2 title "u" with lines
+	 #"rX_data.dat" using 1:2 title "r" with lines
+	 
+#set xrange [-8.7:-7.3]
+#set yrange [3.4:4.1]
+#set term wxt 3
+#set title "r and R"
+#plot "RX_data.dat" using 1:2 title "R" with lines,\
+	 "rX_data.dat" using 1:2 title "r" with lines
+
+pause -1 "Press return key to continue..."

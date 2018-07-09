@@ -1,0 +1,27 @@
+set dgrid3d 128,128
+
+set xrange [-60:60]
+set yrange [-60:60]
+#set term wxt 0
+#set title "Density Distribution"
+#splot "r_data.dat" u 1:2:3 with lines
+
+set term wxt 1
+set title "Potential Distribution"
+splot "u_data.dat" with lines
+
+#set term wxt 2
+#set title "Density Distribution"
+#splot "R_data.dat" with lines
+
+#set xrange [-4.3:4.3]
+#set yrange [-4.3:4.3]
+#set term wxt 3
+#set title "Density Distribution"
+#splot "rfft_data.dat" u 1:2:3 with lines
+
+#set title "freq = 2"
+#set term wxt 3
+#splot "rfft.dat" u 1:2:3 with lines
+
+pause -1 "Press return key to continue..."

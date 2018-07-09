@@ -1,0 +1,12 @@
+set xrange [500:10000]
+set yrange [0:14]
+set xlabel "Sample Size"
+set ylabel "Time(s)"
+set title "Time vs Sample Size"
+
+set term wxt 0
+plot "time.dat" using 1:2 title "GPU - Tesla K80" with lines,	\
+     "time.dat" using 1:3 title "CPU - Intel Xeon E5-2680 v4" with lines,	\
+
+
+pause -1 "Press return key to continue..."
